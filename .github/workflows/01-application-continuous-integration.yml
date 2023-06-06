@@ -1,0 +1,14 @@
+name: 01 - Continuous Integration (Sample Application)
+on:
+  pull_request:
+    branches:
+    - main
+    paths:
+    - 'applications/sample-application/**'
+
+jobs:
+  checkout:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
