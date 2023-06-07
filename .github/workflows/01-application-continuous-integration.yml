@@ -7,8 +7,31 @@ on:
     - 'applications/sample-application/**'
 
 jobs:
-  checkout:
+  build-lint-and-static-analysis:
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
     steps:
     - name: Checkout
       uses: actions/checkout@v3
+    - name: Build and lint Bicep
+      run: |
+        az bicep build --file applications/sample-application/application.bicep
+    - name: Create static analysis results folder
+      run: |
+        mkdir -p static-analysis-results
+    - name: Perform KICS static analysis
+      id: kics
+      uses: checkmarx/kics-github-action@v1.6.3
+      with:
+        path: 'applications/sample-application/'
+        fail_on: 'high,medium'
+        output_path: 'static-analysis-results'
+        output_formats: 'json,sarif'
+    - name: Upload KICS static analysis results
+      if: always() && (steps.kics.outcome == 'success' || steps.kics.outcome == 'failure')
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'static-analysis-results/results.sarif'
