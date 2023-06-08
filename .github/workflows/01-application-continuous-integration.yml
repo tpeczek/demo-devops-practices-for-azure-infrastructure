@@ -7,8 +7,127 @@ on:
     - 'applications/sample-application/**'
 
 jobs:
-  checkout:
+  build-lint-and-static-analysis:
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
     steps:
     - name: Checkout
       uses: actions/checkout@v3
+    - name: Build and lint Bicep
+      run: |
+        az bicep build --file applications/sample-application/application.bicep
+    - name: Create static analysis results folder
+      run: |
+        mkdir -p static-analysis-results
+    - name: Perform KICS static analysis
+      id: kics
+      uses: checkmarx/kics-github-action@v1.6.3
+      with:
+        path: 'applications/sample-application/'
+        fail_on: 'high,medium'
+        output_path: 'static-analysis-results'
+        output_formats: 'json,sarif'
+    - name: Upload KICS static analysis results
+      if: always() && (steps.kics.outcome == 'success' || steps.kics.outcome == 'failure')
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'static-analysis-results/results.sarif'
+  preflight-validation:
+    needs: build-lint-and-static-analysis
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    - name: Perform preflight validation
+      uses: azure/arm-deploy@v1
+      with:
+        scope: 'resourcegroup'
+        resourceGroupName: 'rg-devops-practices-sample-application-sandbox'
+        template: 'applications/sample-application/application.bicep'
+        deploymentMode: 'Validate'
+        failOnStdErr: false
+  preview:
+    needs: preflight-validation
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    - name: Prepare preview
+      run: |
+        echo 'DEPLOYMENT_WHAT_IF<<EOF' >> $GITHUB_ENV
+        az deployment group what-if --resource-group rg-devops-practices-sample-application-sandbox --template-file applications/sample-application/application.bicep --result-format ResourceIdOnly >> $GITHUB_ENV
+        echo 'EOF' >> $GITHUB_ENV
+    - name:  Create preview comment
+      uses: actions/github-script@v6
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: process.env.DEPLOYMENT_WHAT_IF
+          })
+  cost-estimation:
+    needs: preflight-validation
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+    - name: Download Azure Cost Estimator
+      id: download-ace
+      uses: robinraju/release-downloader@v1.7
+      with:
+        repository: "TheCloudTheory/arm-estimator"
+        tag: "1.2"
+        fileName: "ace-linux-x64.zip"
+    - name: Install Azure Cost Estimator
+      run: |
+        unzip ace-linux-x64.zip
+        chmod +x ./azure-cost-estimator
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    - name: Prepare cost estimation
+      run: |
+        echo 'COST_ESTIMATION<<EOF' >> $GITHUB_ENV
+        ./azure-cost-estimator applications/sample-application/application.bicep ${{ secrets.AZURE_SUBSCRIPTION_ID }} rg-devops-practices-sample-application-sandbox --stdout --disableDetailedMetrics >> $GITHUB_ENV
+        echo 'EOF' >> $GITHUB_ENV
+    - name:  Create pull request comment
+      uses: actions/github-script@v6
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: process.env.COST_ESTIMATION
+          })
