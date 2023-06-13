@@ -2,7 +2,7 @@
 
 Sample project for demonstrating how to implement DevOps practices for Azure infrastructure.. You can read more here:
 
-- [DevOps Practices for Azure Infrastructure  - Continuous Integration]()
+- [DevOps Practices for Azure Infrastructure  - Continuous Integration](https://www.tpeczek.com/2023/06/devops-practices-for-azure.html)
 
 ## Sponsor This Project
 
