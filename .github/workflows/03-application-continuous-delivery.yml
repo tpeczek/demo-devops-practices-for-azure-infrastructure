@@ -1,0 +1,48 @@
+name: 03 - Continuous Delivery (Sample Application)
+on:
+  push:
+    tags:
+    - "sample-application-v[0-9]+.[0-9]+.[0-9]+"
+
+env:
+  INFRASTRUCTURE_REGISTRY: 'crinfrastructuremodules'
+
+jobs:
+  publish-infrastructure-to-registry:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+    - name: Extract application version from tag
+      run: |
+        echo "APPLICATION_VERSION=${GITHUB_REF/refs\/tags\/sample-application-v/}" >> $GITHUB_ENV
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    - name: Get runner IP address
+      id: get-runner-ip
+      run: |
+        runnerIpAddress=$(curl curl https://ifconfig.me/ip)
+        echo "ip_address=$runnerIpAddress" >> $GITHUB_OUTPUT
+    - name: Add runner IP address to infrastructure registry firewall whitelist
+      run: |
+        az acr update --name ${INFRASTRUCTURE_REGISTRY} --public-network-enabled true
+        az acr network-rule add --name ${INFRASTRUCTURE_REGISTRY} --ip-address ${RUNNER_IP_ADDRESS}
+      env:
+        RUNNER_IP_ADDRESS: ${{ steps.get-runner-ip.outputs.ip_address }}
+    - name: Publish application Bicep to infrastructure registry
+      run: |
+        bicep publish applications/sample-application/application.bicep --target br:${INFRASTRUCTURE_REGISTRY}.azurecr.io/infrastructure/applications/sample-application:${APPLICATION_VERSION}
+    - name: Remove runner IP address from infrastructure registry firewall whitelist
+      if: always()
+      run: |
+        az acr network-rule remove --name ${INFRASTRUCTURE_REGISTRY} --ip-address ${RUNNER_IP_ADDRESS}
+        az acr update --name ${INFRASTRUCTURE_REGISTRY} --public-network-enabled false
+      env:
+        RUNNER_IP_ADDRESS: ${{ steps.get-runner-ip.outputs.ip_address }}
