@@ -1,0 +1,31 @@
+name: 00 - Control Plane Deployment
+on:
+  workflow_dispatch:
+
+env:
+  CONTROL_PLANE_RESOURCE_GROUP: 'rg-devops-practices-control-plane'
+  CONTROL_PLANE_RESOURCE_GROUP_LOCATION: 'westeurope'
+  INFRASTRUCTURE_REGISTRY: 'crinfrastructuremodules'
+
+jobs:
+  deploy-control-plane:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    - name: Deploy Control Plane
+      uses: azure/arm-deploy@v1
+      with:
+        scope: 'subscription'
+        region: 'westeurope'
+        template: 'control-plane/control-plane.bicep'
+        parameters: resourceGroupName=${{ env.CONTROL_PLANE_RESOURCE_GROUP }} resourceGroupLocation=${{ env.CONTROL_PLANE_RESOURCE_GROUP_LOCATION }} containerRegistryName=${{ env.INFRASTRUCTURE_REGISTRY }}
