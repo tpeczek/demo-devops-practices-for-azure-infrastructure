@@ -1,0 +1,46 @@
+name: 04 - Continuous Deployment (Environment)
+on:
+  workflow_dispatch:
+
+env:
+  INFRASTRUCTURE_REGISTRY: 'crinfrastructuremodules'
+
+jobs:
+  deploy-environment:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    - name: Get runner IP address
+      id: get-runner-ip
+      run: |
+        runnerIpAddress=$(curl curl https://ifconfig.me/ip)
+        echo "ip_address=$runnerIpAddress" >> $GITHUB_OUTPUT
+    - name: Add runner IP address to infrastructure registry firewall whitelist
+      run: |
+        az acr update --name ${INFRASTRUCTURE_REGISTRY} --public-network-enabled true
+        az acr network-rule add --name ${INFRASTRUCTURE_REGISTRY} --ip-address ${RUNNER_IP_ADDRESS}
+      env:
+        RUNNER_IP_ADDRESS: ${{ steps.get-runner-ip.outputs.ip_address }}
+    - name: Deploy Environment
+      uses: azure/arm-deploy@v1
+      with:
+        scope: 'subscription'
+        region: 'westeurope'
+        template: 'environment/environment.bicep'
+    - name: Remove runner IP address from infrastructure registry firewall whitelist
+      if: always()
+      run: |
+        az acr network-rule remove --name ${INFRASTRUCTURE_REGISTRY} --ip-address ${RUNNER_IP_ADDRESS}
+        az acr update --name ${INFRASTRUCTURE_REGISTRY} --public-network-enabled false
+      env:
+        RUNNER_IP_ADDRESS: ${{ steps.get-runner-ip.outputs.ip_address }}
