@@ -1,0 +1,28 @@
+name: 05 - Continuous Testing (Sample Application)
+on:
+  workflow_dispatch:
+
+env:
+  APPLICATION_HOST_NAME: 'app-sampleapplication-webapp-gd3f7mnjwpuyu.azurewebsites.net'
+
+jobs:
+  smoke-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+    - name: Run Pester Tests
+      shell: pwsh
+      run: |
+        $container = New-PesterContainer -Path 'applications/sample-application/tests/smoke-tests.ps1' -Data @{ HostName = '${{ env.APPLICATION_HOST_NAME }}' }
+        Invoke-Pester -Container $container -CI
+  negative-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+    - name: Run Pester Tests
+      shell: pwsh
+      run: |
+        $container = New-PesterContainer -Path 'applications/sample-application/tests/negative-tests.ps1' -Data @{ HostName = '${{ env.APPLICATION_HOST_NAME }}' }
+        Invoke-Pester -Container $container -CI
