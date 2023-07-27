@@ -1,0 +1,75 @@
+name: 06 - Drift Detection (Sample Application)
+on:
+  workflow_dispatch:
+
+env:
+  TAG: sample-application-v1.0.0
+  RESOURCE_GROUP: 'rg-devops-practices-sample-application-prod'
+
+jobs:
+  drift-detection:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      issues: write
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ env.TAG }}
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    - name: Detect infrastructure drift
+      shell: pwsh
+      run: |
+        $issues = @()
+        
+        $drift = az deployment group what-if --resource-group $env:RESOURCE_GROUP --template-file applications/sample-application/application.bicep --mode Complete --no-pretty-print | ConvertFrom-Json
+        foreach ($change in $drift.Changes)
+        {
+          switch ($change.changeType)
+          {
+            'Create'
+            {
+              $issues += @{
+                ResourceName = $change.after.name
+                Description = 'Defined resource doesn''t exist'
+              }
+            }
+            'Delete'
+            {
+              $issues += @{
+                ResourceName = $change.before.name
+                Description = 'Undefined resource exists'
+              }
+            }
+            'Ignore'
+            {
+              $issues += @{
+                ResourceName = $change.before.name
+                Description = 'Undefined resource exists'
+              }
+            }
+          }
+        }
+        
+        'DRIFT_ISSUES<<EOF' >> $env:GITHUB_ENV
+        $issues | ConvertTo-Json -AsArray >> $env:GITHUB_ENV
+        'EOF' >> $env:GITHUB_ENV
+    - name: Report detected infrastructure drift
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const issues = JSON.parse(process.env.DRIFT_ISSUES);
+          for (const issue of issues) {
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '[DRIFT DETECTED] ' + issue.Description + ' (' + issue.ResourceName + ')'
+            });
+          }
