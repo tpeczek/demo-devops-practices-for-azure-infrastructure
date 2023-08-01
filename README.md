@@ -5,6 +5,7 @@ Sample project for demonstrating how to implement DevOps practices for Azure inf
 - [DevOps Practices for Azure Infrastructure  - Continuous Integration](https://www.tpeczek.com/2023/06/devops-practices-for-azure.html)
 - [DevOps Practices for Azure Infrastructure - Continuous Delivery & Continuous Deployment](https://www.tpeczek.com/2023/06/devops-practices-for-azure_27.html)
 - [DevOps Practices for Azure Infrastructure - Continuous Testing](https://www.tpeczek.com/2023/07/devops-practices-for-azure.html)
+- [DevOps Practices for Azure Infrastructure - Continuous Operations & Continuous Monitoring](https://www.tpeczek.com/2023/08/devops-practices-for-azure.html)
 
 ## Sponsor This Project
 
