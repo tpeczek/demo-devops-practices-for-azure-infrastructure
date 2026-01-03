@@ -24,6 +24,6 @@ My blog and open source projects are result of my passion for software developme
 
 ## Copyright and License
 
-Copyright © 2023 - 2025 Tomasz Pęczek
+Copyright © 2023 - 2026 Tomasz Pęczek
 
 Licensed under the [MIT License](https://github.com/tpeczek/demo-devops-practices-for-azure-infrastructure/blob/master/LICENSE.md)
